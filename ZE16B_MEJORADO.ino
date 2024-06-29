@@ -16,9 +16,6 @@ int measurement1;
 unsigned long previousSensorMillis = 0;
 const long sensorInterval = 2000; // intervalo para leer el sensor y actualizar la pantalla
 
-unsigned long previousLedMillis = 0;
-const long ledInterval = 500; // intervalo para actualizar los LEDs y el buzzer
-
 const int buzzerPin = 2;
 const int greenLedPin = 3;
 const int yellowLedPin = 4;
@@ -55,7 +52,6 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
-  static unsigned long previousDelayMillis = 0;
 
   // Leer el sensor a intervalos de 2 segundos
   if (currentMillis - previousSensorMillis >= sensorInterval) {
@@ -63,65 +59,55 @@ void loop() {
 
     byte buf[RESPONSE_CNT - 1]; // BUF LLENA CON LOS DATOS DEL SENSOR
     byte cheksum;
+    writeCommand(getppm, buf); // ENVIAMOS COMANDO read
 
-    // Llenar de ceros el buffer
-    for (int i = 0; i < RESPONSE_CNT; i++) {
+    for (int i = 0; i < RESPONSE_CNT; i++) { // LIMPIA BUF PARA RECEPCIONAR
       buf[i] = 0x0;
+    } // LLENAR DE CEROS EL BUF
+
+    delay(500);
+    writeCommand(getppm, buf); // ENVIAMOS COMANDO Y BUF SE LLENA DE NUEVO
+
+    // parse
+    cheksum = (buf[1] + buf[2] + buf[3] + buf[4] + buf[5] + buf[6] + buf[7]);
+    cheksum = (~cheksum) + 1;
+
+    if (buf[0] == 0xff && buf[1] == 0x04 && buf[8] == cheksum) {
+      measurement = (buf[4] * 256 + buf[5]) * 1; // 0 500
+      measurement1 = (0.6873 * measurement) + 21.137;
+    } else {
+      measurement1 = -1;
     }
 
-    // Escribir el comando para obtener los datos del sensor
-    writeCommand(getppm, buf);
-
-    // Esperar 500 ms sin bloquear
-    if (currentMillis - previousDelayMillis >= 500) {
-      previousDelayMillis = currentMillis;
-      writeCommand(getppm, buf); // Enviamos el comando y el buffer se llena de nuevo
-
-      // Parsear los datos recibidos
-      cheksum = (buf[1] + buf[2] + buf[3] + buf[4] + buf[5] + buf[6] + buf[7]);
-      cheksum = (~cheksum) + 1;
-
-      if (buf[0] == 0xff && buf[1] == 0x04 && buf[8] == cheksum) {
-        measurement = (buf[4] * 256 + buf[5]) * 1; // 0 500
-        measurement1 = (0.6873 * measurement) + 21.137;
-      } else {
-        measurement1 = -1;
-      }
-
-      Serial.println(measurement1);
-      lcd.setCursor(0, 0);
-      lcd.print("PPM: ");
-      lcd.print(measurement1);
-    }
+    Serial.println(measurement1);
+    lcd.setCursor(0, 0);
+    lcd.print("PPM: ");
+    lcd.print(measurement1);
   }
 
-  // Actualizar los LEDs y el buzzer a intervalos de 500ms
-  if (currentMillis - previousLedMillis >= ledInterval) {
-    previousLedMillis = currentMillis;
+  // Actualizar los LEDs y el buzzer continuamente
+  if (measurement1 > buzzerThreshold) {
+    digitalWrite(buzzerPin, HIGH);
+  } else {
+    digitalWrite(buzzerPin, LOW);
+  }
 
-    if (measurement1 > buzzerThreshold) {
-      digitalWrite(buzzerPin, HIGH);
-    } else {
-      digitalWrite(buzzerPin, LOW);
-    }
-
-    if (measurement1 >= 0 && measurement1 < 35) {
-      digitalWrite(greenLedPin, HIGH);
-      digitalWrite(yellowLedPin, LOW);
-      digitalWrite(redLedPin, LOW);
-    } else if (measurement1 >= 35 && measurement1 < 100) {
-      digitalWrite(greenLedPin, LOW);
-      digitalWrite(yellowLedPin, HIGH);
-      digitalWrite(redLedPin, LOW);
-    } else if (measurement1 >= 100) {
-      digitalWrite(greenLedPin, LOW);
-      digitalWrite(yellowLedPin, LOW);
-      digitalWrite(redLedPin, HIGH);
-    } else {
-      digitalWrite(greenLedPin, LOW);
-      digitalWrite(yellowLedPin, LOW);
-      digitalWrite(redLedPin, LOW);
-    }
+  if (measurement1 >= 0 && measurement1 < 35) {
+    digitalWrite(greenLedPin, HIGH);
+    digitalWrite(yellowLedPin, LOW);
+    digitalWrite(redLedPin, LOW);
+  } else if (measurement1 >= 35 && measurement1 < 100) {
+    digitalWrite(greenLedPin, LOW);
+    digitalWrite(yellowLedPin, HIGH);
+    digitalWrite(redLedPin, LOW);
+  } else if (measurement1 >= 100) {
+    digitalWrite(greenLedPin, LOW);
+    digitalWrite(yellowLedPin, LOW);
+    digitalWrite(redLedPin, HIGH);
+  } else {
+    digitalWrite(greenLedPin, LOW);
+    digitalWrite(yellowLedPin, LOW);
+    digitalWrite(redLedPin, LOW);
   }
 }
 
