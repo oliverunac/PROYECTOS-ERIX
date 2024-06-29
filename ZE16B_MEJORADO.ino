@@ -19,8 +19,6 @@ const long sensorInterval = 2000; // intervalo para leer el sensor y actualizar 
 unsigned long previousLedMillis = 0;
 const long ledInterval = 500; // intervalo para actualizar los LEDs y el buzzer
 
-unsigned long previousDelayMillis = 0; // Control del retraso no bloqueante
-
 const int buzzerPin = 2;
 const int greenLedPin = 3;
 const int yellowLedPin = 4;
@@ -36,100 +34,94 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print("   ZE16B-CO     ");
 
-  Serial.begin(9600); // MOSTRAR POR CONSOLA
-  mySerial.begin(9600); // CONECTAR NUESTRO SENSOR
+  Serial.begin(9600); //MOSTRAR POR CONSOLA
+  mySerial.begin(9600); //CONECTAR NUESTRO SENSOR
 
   pinMode(buzzerPin, OUTPUT);
   pinMode(greenLedPin, OUTPUT);
   pinMode(yellowLedPin, OUTPUT);
   pinMode(redLedPin, OUTPUT);
 
-  preheatSensor();
-}
-
-void loop() {
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - previousSensorMillis >= sensorInterval) {
-    previousSensorMillis = currentMillis;
-    readSensor();
-  }
-
-  if (currentMillis - previousLedMillis >= ledInterval) {
-    previousLedMillis = currentMillis;
-    updateLedsAndBuzzer();
-  }
-}
-
-void preheatSensor() {
+  // Precalentamiento
   mySerial.write(getppm, REQUEST_CNT); // ENVIA POR SERIAL COMANDO
   mySerial.flush(); // LIMPIA EL BUFFER SERIAL
   Serial.println("PRECALENTAMIENTO....");
   for (int i = 0; i < 30; i++) {
     Serial.println(i);
-    delay(1000); // Precalentamiento durante 30 segundos
+    delay(1000); //
   }
   Serial.println("SENSOR READY");
 }
 
-void readSensor() {
+void loop() {
   unsigned long currentMillis = millis();
-  static byte buf[RESPONSE_CNT - 1]; // BUF LLENA CON LOS DATOS DEL SENSOR
-  byte cheksum;
+  static unsigned long previousDelayMillis = 0;
 
-  // Llenar de ceros el buffer
-  for (int i = 0; i < RESPONSE_CNT; i++) {
-    buf[i] = 0x0;
-  }
+  // Leer el sensor a intervalos de 2 segundos
+  if (currentMillis - previousSensorMillis >= sensorInterval) {
+    previousSensorMillis = currentMillis;
 
-  writeCommand(getppm, buf); // Enviamos el comando y el buffer se llena de nuevo
+    byte buf[RESPONSE_CNT - 1]; // BUF LLENA CON LOS DATOS DEL SENSOR
+    byte cheksum;
 
-  // Esperar 500 ms sin bloquear
-  if (currentMillis - previousDelayMillis >= 500) {
-    previousDelayMillis = currentMillis;
-    writeCommand(getppm, buf); // Enviamos el comando y el buffer se llena de nuevo
-
-    // Parsear los datos recibidos
-    cheksum = (buf[1] + buf[2] + buf[3] + buf[4] + buf[5] + buf[6] + buf[7]);
-    cheksum = (~cheksum) + 1;
-
-    if (buf[0] == 0xff && buf[1] == 0x04 && buf[8] == cheksum) {
-      measurement = (buf[4] * 256 + buf[5]) * 1; // 0 500
-      measurement1 = (0.6873 * measurement) + 21.137;
-    } else {
-      measurement1 = -1;
+    // Llenar de ceros el buffer
+    for (int i = 0; i < RESPONSE_CNT; i++) {
+      buf[i] = 0x0;
     }
 
-    Serial.println(measurement1);
-    lcd.setCursor(0, 0);
-    lcd.print("PPM: ");
-    lcd.print(measurement1);
-  }
-}
+    // Escribir el comando para obtener los datos del sensor
+    writeCommand(getppm, buf);
 
-void updateLedsAndBuzzer() {
-  if (measurement1 > buzzerThreshold) {
-    digitalWrite(buzzerPin, HIGH);
-  } else {
-    digitalWrite(buzzerPin, LOW);
+    // Esperar 500 ms sin bloquear
+    if (currentMillis - previousDelayMillis >= 500) {
+      previousDelayMillis = currentMillis;
+      writeCommand(getppm, buf); // Enviamos el comando y el buffer se llena de nuevo
+
+      // Parsear los datos recibidos
+      cheksum = (buf[1] + buf[2] + buf[3] + buf[4] + buf[5] + buf[6] + buf[7]);
+      cheksum = (~cheksum) + 1;
+
+      if (buf[0] == 0xff && buf[1] == 0x04 && buf[8] == cheksum) {
+        measurement = (buf[4] * 256 + buf[5]) * 1; // 0 500
+        measurement1 = (0.6873 * measurement) + 21.137;
+      } else {
+        measurement1 = -1;
+      }
+
+      Serial.println(measurement1);
+      lcd.setCursor(0, 0);
+      lcd.print("PPM: ");
+      lcd.print(measurement1);
+    }
   }
 
-  if (measurement1 >= 0 && measurement1 < 35) {
-    digitalWrite(greenLedPin, HIGH);
-    digitalWrite(yellowLedPin, LOW);
-    digitalWrite(redLedPin, LOW);
-  } else if (measurement1 >= 35 && measurement1 < 100) {
-    digitalWrite(greenLedPin, LOW);
-    digitalWrite(yellowLedPin, HIGH);
-    digitalWrite(redLedPin, LOW);
-  } else if (measurement1 >= 100) {
-    digitalWrite(greenLedPin, LOW);
-    digitalWrite(yellowLedPin, LOW);
-    digitalWrite(redLedPin, HIGH);
-  } else {
-    digitalWrite(greenLedPin, LOW);
-    digitalWrite(yellowLedPin, LOW);
-    digitalWrite(redLedPin, LOW);
+  // Actualizar los LEDs y el buzzer a intervalos de 500ms
+  if (currentMillis - previousLedMillis >= ledInterval) {
+    previousLedMillis = currentMillis;
+
+    if (measurement1 > buzzerThreshold) {
+      digitalWrite(buzzerPin, HIGH);
+    } else {
+      digitalWrite(buzzerPin, LOW);
+    }
+
+    if (measurement1 >= 0 && measurement1 < 35) {
+      digitalWrite(greenLedPin, HIGH);
+      digitalWrite(yellowLedPin, LOW);
+      digitalWrite(redLedPin, LOW);
+    } else if (measurement1 >= 35 && measurement1 < 100) {
+      digitalWrite(greenLedPin, LOW);
+      digitalWrite(yellowLedPin, HIGH);
+      digitalWrite(redLedPin, LOW);
+    } else if (measurement1 >= 100) {
+      digitalWrite(greenLedPin, LOW);
+      digitalWrite(yellowLedPin, LOW);
+      digitalWrite(redLedPin, HIGH);
+    } else {
+      digitalWrite(greenLedPin, LOW);
+      digitalWrite(yellowLedPin, LOW);
+      digitalWrite(redLedPin, LOW);
+    }
   }
 }
 
