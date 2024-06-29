@@ -12,21 +12,21 @@ uint8_t getppm[REQUEST_CNT] = {0xff, 0x04, 0x03, 0x00, 0x00, 0x00, 0x01, 0xF4,0x
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 int  measurement;
+int  measurement1;
 
 void setup() {
   lcd.init(); 
   lcd.backlight();
   lcd.setCursor(0, 0);
-  lcd.print("  ERIX ES UNA   ");
+  lcd.print("                ");
   lcd.setCursor(0, 1);
-  lcd.print("    PERRITA     ");
+  lcd.print("   ZE16B-CO     ");
 
   Serial.begin(9600);//MOSTRAR POR CONSOLA
   mySerial.begin(9600);//CONECTAR NUESTRO SENSOR
   //precalentamientp
   mySerial.write(getppm, REQUEST_CNT);//ENVIA POR SERIAL COMANDO -.....
   mySerial.flush();//LIMPIA EL BUFFER SERIAL
-  //delay(1200000);//si es por primera vez
   Serial.println("PRECALENTAMIENTO....");
   for(int i=0;i<30;i++){
     Serial.println(i);
@@ -52,17 +52,19 @@ writeCommand(getppm, buf);//ENVIAMOS COMANDO read
   if (buf[0] == 0xff && buf[1] == 0x04 && buf[8] == cheksum)
   {
     measurement = (buf[4] * 256 + buf[5])*1; // 0 500
-
+    measurement1 = (0.6873*measurement)+21.137;
   }
   else
   {
-    measurement = -1;
+    measurement1 = -1;
   }
 
-    Serial.println(measurement);
-
+    Serial.println(measurement1);
+    lcd.setCursor(0, 0);
+    lcd.print("PPM: ");
+    lcd.print(measurement1);
+    
     delay(2000);
-
 }
 
 void writeCommand(uint8_t cmd[], uint8_t *response)
@@ -77,7 +79,7 @@ void writeCommand(uint8_t cmd[], uint8_t *response)
     {
       if (++i > WAIT_READ_TIMES)
       {
-        Serial.println("can't get ZE16b-CO response.");
+        Serial.println("can't get ZE16B-CO response.");
         return;
       }
       delay(WAIT_READ_DELAY);
